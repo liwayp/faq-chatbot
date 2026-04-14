@@ -62,7 +62,7 @@ def sidebar_admin():
         
         # Create index button
         if uploaded_files:
-            if st.button("🔨 Create ChromaDB Index", type="primary"):
+            if st.button("🔨 Create FAISS Index", type="primary"):
                 with st.spinner("Processing documents..."):
                     try:
                         # Process uploaded files

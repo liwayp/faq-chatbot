@@ -12,6 +12,7 @@ dist/
 build/
 
 # FAISS index files
+chroma_db/
 *.index
 *.index.chunks
 

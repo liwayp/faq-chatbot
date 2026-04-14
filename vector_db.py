@@ -1,43 +1,30 @@
 import os
-import uuid
-import chromadb
-from chromadb.api.types import EmbeddingFunction, Embeddings
+import pickle
+import faiss
+import numpy as np
 from typing import List, Tuple
 from openai import OpenAI
 
 
-class OpenAIEmbeddingFunction(EmbeddingFunction):
-    """Custom embedding function using OpenAI API."""
-    def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
-        self.client = OpenAI(api_key=api_key)
-        self.model = model
-
-    def __call__(self, input: List[str]) -> Embeddings:
-        response = self.client.embeddings.create(
-            model=self.model,
-            input=input
-        )
-        return [data.embedding for data in response.data]
-
-
 class VectorDatabase:
-    """ChromaDB vector database for storing and retrieving document chunks."""
+    """FAISS vector database for storing and retrieving document chunks."""
 
     PERSIST_DIR = "./chroma_db"
 
     def __init__(self, embedding_model: str = "text-embedding-3-small"):
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.embedding_model = embedding_model
-        self.embedding_fn = OpenAIEmbeddingFunction(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            model=embedding_model
-        )
-        self.chroma_client = chromadb.PersistentClient(path=self.PERSIST_DIR)
-        self.collection = None
+        self.index = None
         self.chunks = []
+        self.dimension = 1536
 
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings using OpenAI API."""
-        return self.embedding_fn(texts)
+        """Get embeddings from OpenAI API."""
+        response = self.client.embeddings.create(
+            model=self.embedding_model,
+            input=texts
+        )
+        return [data.embedding for data in response.data]
 
     def split_text_into_chunks(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """Split text into overlapping chunks."""
@@ -49,7 +36,6 @@ class VectorDatabase:
             end = start + chunk_size
             chunk = text[start:end]
 
-            # Try to break at sentence boundary
             if end < text_length:
                 last_period = chunk.rfind('.')
                 last_newline = chunk.rfind('\n')
@@ -67,40 +53,32 @@ class VectorDatabase:
         return chunks
 
     def create_index(self, text: str, progress_callback=None) -> Tuple[int, List[str]]:
-        """Create ChromaDB collection from text and return chunk count and chunks."""
+        """Create FAISS index from text and return chunk count and chunks."""
         self.chunks = self.split_text_into_chunks(text)
 
         if progress_callback:
             progress_callback(30, "Splitting documents...")
 
-        try:
-            self.chroma_client.delete_collection(name="faq_collection")
-        except:
-            pass
-
-        self.collection = self.chroma_client.create_collection(
-            name="faq_collection",
-            embedding_function=self.embedding_fn
-        )
-
         batch_size = 100
-        all_ids = []
+        all_embeddings = []
 
         for i in range(0, len(self.chunks), batch_size):
             batch = self.chunks[i:i + batch_size]
-            all_ids.extend([str(uuid.uuid4()) for _ in batch])
+            embeddings = self.get_embeddings(batch)
+            all_embeddings.extend(embeddings)
 
             if progress_callback:
                 progress = 30 + int((i / len(self.chunks)) * 60)
                 progress_callback(progress, f"Creating embeddings... ({i}/{len(self.chunks)})")
 
         if progress_callback:
-            progress_callback(90, "Adding to ChromaDB...")
+            progress_callback(90, "Building FAISS index...")
 
-        self.collection.add(
-            documents=self.chunks,
-            ids=all_ids
-        )
+        embeddings_array = np.array(all_embeddings).astype('float32')
+        self.dimension = embeddings_array.shape[1]
+
+        self.index = faiss.IndexFlatL2(self.dimension)
+        self.index.add(embeddings_array)
 
         if progress_callback:
             progress_callback(100, "Index created successfully!")
@@ -109,39 +87,40 @@ class VectorDatabase:
 
     def search(self, query: str, top_k: int = 4) -> List[Tuple[str, float]]:
         """Search for most relevant chunks given a query."""
-        if self.collection is None or len(self.chunks) == 0:
+        if self.index is None or len(self.chunks) == 0:
             raise ValueError("No index created yet. Please create an index first.")
 
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=top_k
-        )
+        query_embedding = self.get_embeddings([query])
+        query_vector = np.array(query_embedding).astype('float32')
 
-        result_list = []
-        if results['documents'] and results['distances']:
-            for i, doc in enumerate(results['documents'][0]):
-                distance = results['distances'][0][i] if results['distances'] else 0.0
-                result_list.append((doc, distance))
+        distances, indices = self.index.search(query_vector, top_k)
 
-        return result_list
+        results = []
+        for i, idx in enumerate(indices[0]):
+            if idx != -1:
+                results.append((self.chunks[idx], float(distances[0][i])))
+
+        return results
 
     def save_index(self):
-        """No explicit save needed - PersistentClient auto-saves to disk."""
-        pass
+        """Save FAISS index and chunks to disk."""
+        if self.index is None:
+            raise ValueError("No index to save.")
+        os.makedirs(self.PERSIST_DIR, exist_ok=True)
+        faiss.write_index(self.index, self.PERSIST_DIR + "/faiss.index")
+        with open(self.PERSIST_DIR + "/chunks.pkl", 'wb') as f:
+            pickle.dump(self.chunks, f)
 
     def load_index(self):
-        """Load ChromaDB collection from disk."""
+        """Load FAISS index and chunks from disk."""
         try:
-            self.collection = self.chroma_client.get_collection(
-                name="faq_collection",
-                embedding_function=self.embedding_fn
-            )
-            all_docs = self.collection.get()
-            self.chunks = all_docs['documents'] if all_docs else []
+            self.index = faiss.read_index(self.PERSIST_DIR + "/faiss.index")
+            with open(self.PERSIST_DIR + "/chunks.pkl", 'rb') as f:
+                self.chunks = pickle.load(f)
             return True
         except:
             return False
 
     def is_ready(self) -> bool:
         """Check if vector database is ready."""
-        return self.collection is not None and len(self.chunks) > 0
+        return self.index is not None and len(self.chunks) > 0
