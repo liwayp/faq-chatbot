@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(pip show *)",
+      "Bash(source *)",
+      "Bash(pip install *)",
+      "Bash(pip list)",
+      "Bash(rm *)"
     ]
-  }
+  },
+  "$version": 3
 }
