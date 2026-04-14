@@ -1,0 +1,37 @@
+Frequently Asked Questions (FAQ)
+
+1. What are your business hours?
+Our customer service is available Monday through Friday, 9:00 AM to 6:00 PM EST. Weekend support is available via email only.
+
+2. How do I reset my password?
+To reset your password, click on the "Forgot Password" link on the login page. Enter your email address, and we'll send you a password reset link within 5 minutes.
+
+3. What is your refund policy?
+We offer a 30-day money-back guarantee on all plans. If you're not satisfied with our service, contact our support team within 30 days of purchase for a full refund.
+
+4. How can I contact customer support?
+You can reach our support team via:
+- Email: support@company.com
+- Phone: 1-800-123-4567
+- Live chat on our website during business hours
+
+5. What payment methods do you accept?
+We accept all major credit cards (Visa, MasterCard, American Express), PayPal, and bank transfers for annual plans.
+
+6. Can I upgrade or downgrade my plan?
+Yes, you can change your plan at any time from your account settings. Upgrades take effect immediately, while downgrades apply at the next billing cycle.
+
+7. Is my data secure?
+We use industry-standard encryption (SSL/TLS) to protect your data. Our servers are hosted in SOC 2 compliant data centers with 99.9% uptime guarantee.
+
+8. Do you offer a free trial?
+Yes, we offer a 14-day free trial on all our plans. No credit card required to start your trial.
+
+9. How many users can I add to my account?
+The number of users depends on your plan:
+- Basic: Up to 5 users
+- Professional: Up to 25 users
+- Enterprise: Unlimited users
+
+10. Do you offer training for new users?
+Yes, we provide free onboarding sessions and have an extensive knowledge base with video tutorials. Enterprise customers get dedicated training sessions.
